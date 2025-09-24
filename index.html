@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多周期共享订阅计算器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5',
+                        secondary: '#10B981',
+                        accent: '#F59E0B',
+                        neutral: {
+                            100: '#F3F4F6',
+                            200: '#E5E7EB',
+                            300: '#D1D5DB',
+                            400: '#9CA3AF',
+                            500: '#6B7280',
+                            600: '#4B5563',
+                            700: '#374151',
+                            800: '#1F2937',
+                            900: '#111827'
+                        }
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    }
+                },
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .toggle-active {
+                @apply bg-primary text-white;
+            }
+        }
+    </style>
+</head>
+<body class="font-inter bg-neutral-100 text-neutral-800 min-h-screen">
+    <header class="bg-primary text-white py-4 px-6">
+        <h1 class="text-2xl font-bold">多周期共享订阅计算器</h1>
+    </header>
+
+    <main class="container mx-auto px-4 py-8">
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-semibold">订阅周期设置</h2>
+                <button id="addPeriodBtn" class="bg-primary text-white px-4 py-2 rounded flex items-center">
+                    <i class="fa fa-plus mr-2"></i>添加周期
+                </button>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-neutral-700 mb-1">订阅名称</label>
+                <input type="text" id="subscriptionName" class="w-full px-3 py-2 border border-neutral-300 rounded" placeholder="例如：视频会员">
+            </div>
+            
+            <div id="periodsContainer">
+                <!-- 第一个周期 -->
+                <div class="period-item border border-neutral-200 rounded-lg p-4 mb-4" data-id="1">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-medium">周期 #1</h3>
+                        <button class="delete-period text-neutral-400 hover:text-red-500" data-id="1" disabled>
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-neutral-700 mb-1">开始日期</label>
+                            <input type="date" class="period-start w-full px-3 py-2 border border-neutral-300 rounded" data-id="1">
+                            
+                            <label class="block text-sm font-medium text-neutral-700 mb-1 mt-3">结束日期</label>
+                            <input type="date" class="period-end w-full px-3 py-2 border border-neutral-300 rounded" data-id="1">
+                            
+                            <div class="text-sm text-neutral-500 mt-2">
+                                <span class="period-duration" data-id="1">周期时长: 计算中...</span>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-neutral-700 mb-1">费用类型</label>
+                            <div class="flex border border-neutral-300 rounded overflow-hidden mb-3">
+                                <button class="cost-type-btn toggle-active flex-1 py-2" data-type="total" data-id="1">
+                                    总费用
+                                </button>
+                                <button class="cost-type-btn flex-1 py-2 bg-neutral-100" data-type="monthly" data-id="1">
+                                    月度费用
+                                </button>
+                            </div>
+                            
+                            <!-- 费用输入区域 -->
+                            <div id="costInputs_1">
+                                <label class="block text-sm font-medium text-neutral-700 mb-1">总费用 (元)</label>
+                                <input type="number" id="totalCost_1" class="w-full px-3 py-2 border border-neutral-300 rounded" placeholder="0.00" min="0" step="0.01">
+                                
+                                <label class="block text-sm font-medium text-neutral-700 mb-1 mt-3 hidden" id="monthlyLabel_1">月度费用 (元)</label>
+                                <input type="number" id="monthlyCost_1" class="w-full px-3 py-2 border border-neutral-300 rounded hidden" placeholder="0.00" min="0" step="0.01">
+                            </div>
+                            
+                            <label class="block text-sm font-medium text-neutral-700 mb-1 mt-3">参与人数</label>
+                            <input type="number" id="participants_1" class="w-full px-3 py-2 border border-neutral-300 rounded" value="2" min="1">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="calculateBtn" class="bg-secondary text-white px-6 py-2 rounded mt-4">
+                计算费用
+            </button>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">计算结果</h2>
+            <div id="results" class="text-center py-8 text-neutral-500">
+                请添加周期并计算费用
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // 初始化日期
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date();
+            const nextMonth = new Date();
+            nextMonth.setMonth(today.getMonth() + 1);
+            
+            // 设置默认日期格式 YYYY-MM-DD
+            const formatDate = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+            
+            // 设置第一个周期的默认日期
+            document.querySelector('.period-start[data-id="1"]').value = formatDate(today);
+            document.querySelector('.period-end[data-id="1"]').value = formatDate(nextMonth);
+            calculateDuration(1);
+            
+            // 绑定所有事件处理函数
+            bindEvents();
+        });
+        
+        // 绑定所有事件
+        function bindEvents() {
+            // 添加周期按钮
+            document.getElementById('addPeriodBtn').addEventListener('click', addNewPeriod);
+            
+            // 计算按钮
+            document.getElementById('calculateBtn').addEventListener('click', calculateAll);
+            
+            // 费用类型切换按钮点击事件
+            document.addEventListener('click', function(e) {
+                // 处理费用类型切换
+                if (e.target.classList.contains('cost-type-btn')) {
+                    const type = e.target.getAttribute('data-type');
+                    const id = e.target.getAttribute('data-id');
+                    switchCostType(id, type);
+                    return;
+                }
+                
+                // 处理删除周期
+                if (e.target.closest('.delete-period')) {
+                    const btn = e.target.closest('.delete-period');
+                    if (!btn.disabled) {
+                        const id = btn.getAttribute('data-id');
+                        deletePeriod(id);
+                    }
+                    return;
+                }
+            });
+            
+            // 日期变化事件 - 计算周期时长
+            document.addEventListener('change', function(e) {
+                if (e.target.classList.contains('period-start') || e.target.classList.contains('period-end')) {
+                    const id = e.target.getAttribute('data-id');
+                    calculateDuration(id);
+                }
+            });
+        }
+        
+        // 添加新周期
+        function addNewPeriod() {
+            const container = document.getElementById('periodsContainer');
+            const periodCount = document.querySelectorAll('.period-item').length;
+            const newId = periodCount + 1;
+            
+            // 设置默认日期
+            const today = new Date();
+            const nextMonth = new Date();
+            nextMonth.setMonth(today.getMonth() + 1);
+            
+            const formatDate = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+            
+            // 创建新周期元素
+            const newPeriod = document.createElement('div');
+            newPeriod.className = 'period-item border border-neutral-200 rounded-lg p-4 mb-4';
+            newPeriod.setAttribute('data-id', newId);
+            
+            newPeriod.innerHTML = `
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-medium">周期 #${newId}</h3>
+                    <button class="delete-period text-neutral-400 hover:text-red-500" data-id="${newId}">
+                        <i class="fa fa-trash"></i>
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-neutral-700 mb-1">开始日期</label>
+                        <input type="date" class="period-start w-full px-3 py-2 border border-neutral-300 rounded" data-id="${newId}" value="${formatDate(today)}">
+                        
+                        <label class="block text-sm font-medium text-neutral-700 mb-1 mt-3">结束日期</label>
+                        <input type="date" class="period-end w-full px-3 py-2 border border-neutral-300 rounded" data-id="${newId}" value="${formatDate(nextMonth)}">
+                        
+                        <div class="text-sm text-neutral-500 mt-2">
+                            <span class="period-duration" data-id="${newId}">周期时长: 计算中...</span>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-neutral-700 mb-1">费用类型</label>
+                        <div class="flex border border-neutral-300 rounded overflow-hidden mb-3">
+                            <button class="cost-type-btn toggle-active flex-1 py-2" data-type="total" data-id="${newId}">
+                                总费用
+                            </button>
+                            <button class="cost-type-btn flex-1 py-2 bg-neutral-100" data-type="monthly" data-id="${newId}">
+                                月度费用
+                            </button>
+                        </div>
+                        
+                        <!-- 费用输入区域 -->
+                        <div id="costInputs_${newId}">
+                            <label class="block text-sm font-medium text-neutral-700 mb-1">总费用 (元)</label>
+                            <input type="number" id="totalCost_${newId}" class="w-full px-3 py-2 border border-neutral-300 rounded" placeholder="0.00" min="0" step="0.01">
+                            
+                            <label class="block text-sm font-medium text-neutral-700 mb-1 mt-3 hidden" id="monthlyLabel_${newId}">月度费用 (元)</label>
+                            <input type="number" id="monthlyCost_${newId}" class="w-full px-3 py-2 border border-neutral-300 rounded hidden" placeholder="0.00" min="0" step="0.01">
+                        </div>
+                        
+                        <label class="block text-sm font-medium text-neutral-700 mb-1 mt-3">参与人数</label>
+                        <input type="number" id="participants_${newId}" class="w-full px-3 py-2 border border-neutral-300 rounded" value="2" min="1">
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(newPeriod);
+            calculateDuration(newId);
+            
+            // 启用所有删除按钮（因为现在至少有两个周期）
+            document.querySelectorAll('.delete-period').forEach(btn => {
+                btn.disabled = false;
+            });
+        }
+        
+        // 切换费用类型 - 修复输入框显示问题
+        function switchCostType(id, type) {
+            // 更新按钮状态
+            document.querySelectorAll(`.cost-type-btn[data-id="${id}"]`).forEach(btn => {
+                if (btn.getAttribute('data-type') === type) {
+                    btn.classList.add('toggle-active');
+                    btn.classList.remove('bg-neutral-100');
+                } else {
+                    btn.classList.remove('toggle-active');
+                    btn.classList.add('bg-neutral-100');
+                }
+            });
+            
+            // 获取元素引用
+            const totalCostInput = document.getElementById(`totalCost_${id}`);
+            const monthlyCostInput = document.getElementById(`monthlyCost_${id}`);
+            const monthlyLabel = document.getElementById(`monthlyLabel_${id}`);
+            
+            // 切换显示状态 - 简化逻辑确保显示正确
+            if (type === 'monthly') {
+                // 显示月度费用输入，隐藏总费用输入
+                totalCostInput.classList.add('hidden');
+                totalCostInput.previousElementSibling.classList.add('hidden');
+                
+                monthlyLabel.classList.remove('hidden');
+                monthlyCostInput.classList.remove('hidden');
+            } else {
+                // 显示总费用输入，隐藏月度费用输入
+                monthlyCostInput.classList.add('hidden');
+                monthlyLabel.classList.add('hidden');
+                
+                totalCostInput.previousElementSibling.classList.remove('hidden');
+                totalCostInput.classList.remove('hidden');
+            }
+        }
+        
+        // 计算周期时长
+        function calculateDuration(id) {
+            const startDate = new Date(document.querySelector(`.period-start[data-id="${id}"]`).value);
+            const endDate = new Date(document.querySelector(`.period-end[data-id="${id}"]`).value);
+            
+            // 确保结束日期不早于开始日期
+            if (endDate <= startDate) {
+                const newEndDate = new Date(startDate);
+                newEndDate.setMonth(startDate.getMonth() + 1);
+                document.querySelector(`.period-end[data-id="${id}"]`).value = newEndDate.toISOString().split('T')[0];
+                endDate.setTime(newEndDate.getTime());
+            }
+            
+            // 计算天数
+            const timeDiff = endDate - startDate;
+            const days = Math.ceil(timeDiff / (1000 * 3600 * 24));
+            
+            // 计算月份
+            let months = (endDate.getFullYear() - startDate.getFullYear()) * 12;
+            months += endDate.getMonth() - startDate.getMonth();
+            
+            // 至少算1个月
+            months = Math.max(1, months);
+            
+            // 更新显示
+            document.querySelector(`.period-duration[data-id="${id}"]`).textContent = 
+                `周期时长: ${days}天 (${months}个月)`;
+                
+            return { days, months };
+        }
+        
+        // 删除周期
+        function deletePeriod(id) {
+            const period = document.querySelector(`.period-item[data-id="${id}"]`);
+            if (period) {
+                period.remove();
+                
+                // 重新编号周期
+                const periods = document.querySelectorAll('.period-item');
+                periods.forEach((period, index) => {
+                    const newId = index + 1;
+                    period.setAttribute('data-id', newId);
+                    period.querySelector('h3').textContent = `周期 #${newId}`;
+                    
+                    // 更新所有子元素的data-id
+                    period.querySelectorAll('[data-id]').forEach(el => {
+                        el.setAttribute('data-id', newId);
+                    });
+                });
+                
+                // 如果只剩一个周期，禁用删除按钮
+                if (periods.length === 1) {
+                    periods[0].querySelector('.delete-period').disabled = true;
+                }
+            }
+        }
+        
+        // 计算所有周期费用 - 确保月度费用计算正确
+        function calculateAll() {
+            const subscriptionName = document.getElementById('subscriptionName').value || '未命名订阅';
+            const periods = document.querySelectorAll('.period-item');
+            const resultsContainer = document.getElementById('results');
+            
+            // 验证是否有周期
+            if (periods.length === 0) {
+                resultsContainer.innerHTML = '<p class="text-red-500">请添加至少一个周期</p>';
+                return;
+            }
+            
+            let resultsHtml = `<h3 class="font-medium mb-4">${subscriptionName}</h3>`;
+            resultsHtml += '<div class="space-y-4">';
+            
+            let totalCost = 0;
+            
+            // 计算每个周期
+            periods.forEach((period, index) => {
+                const id = index + 1;
+                const startDate = document.querySelector(`.period-start[data-id="${id}"]`).value;
+                const endDate = document.querySelector(`.period-end[data-id="${id}"]`).value;
+                const participants = parseInt(document.getElementById(`participants_${id}`).value) || 1;
+                
+                // 确定当前选中的费用类型
+                const isMonthly = document.querySelector(`.cost-type-btn[data-type="monthly"][data-id="${id}"].toggle-active`) !== null;
+                
+                let cost, displayText;
+                
+                if (isMonthly) {
+                    // 月度费用计算逻辑
+                    const monthlyCost = parseFloat(document.getElementById(`monthlyCost_${id}`).value) || 0;
+                    
+                    // 验证月度费用
+                    if (monthlyCost <= 0) {
+                        resultsContainer.innerHTML = `<p class="text-red-500">周期 #${id} 请输入有效的月度费用</p>`;
+                        return;
+                    }
+                    
+                    const duration = calculateDuration(id);
+                    cost = monthlyCost * duration.months;
+                    displayText = `月度费用: ¥${monthlyCost.toFixed(2)} × ${duration.months}个月 = 总费用: ¥${cost.toFixed(2)}`;
+                } else {
+                    // 总费用计算逻辑
+                    cost = parseFloat(document.getElementById(`totalCost_${id}`).value) || 0;
+                    
+                    // 验证总费用
+                    if (cost <= 0) {
+                        resultsContainer.innerHTML = `<p class="text-red-500">周期 #${id} 请输入有效的总费用</p>`;
+                        return;
+                    }
+                    
+                    displayText = `总费用: ¥${cost.toFixed(2)}`;
+                }
+                
+                // 计算人均费用
+                const perPerson = cost / participants;
+                totalCost += cost;
+                
+                // 格式化日期显示
+                const formatDate = (dateString) => {
+                    const date = new Date(dateString);
+                    return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+                };
+                
+                // 添加到结果HTML
+                resultsHtml += `
+                    <div class="border border-neutral-200 rounded p-3">
+                        <div class="font-medium mb-2">周期 #${id}</div>
+                        <div class="text-sm mb-1">日期: ${formatDate(startDate)} 至 ${formatDate(endDate)}</div>
+                        <div class="text-sm mb-1">${displayText}</div>
+                        <div class="text-sm mb-1">参与人数: ${participants}人</div>
+                        <div class="text-sm font-medium text-primary">人均费用: ¥${perPerson.toFixed(2)}</div>
+                    </div>
+                `;
+            });
+            
+            resultsHtml += '</div>';
+            resultsHtml += `<div class="mt-4 p-3 bg-neutral-50 rounded">所有周期总费用: <span class="font-bold text-accent">¥${totalCost.toFixed(2)}</span></div>`;
+            
+            // 显示结果
+            resultsContainer.innerHTML = resultsHtml;
+        }
+    </script>
+</body>
+</html>
